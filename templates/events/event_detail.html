@@ -1,0 +1,113 @@
+<!-- templates/events/event_detail.html -->
+{% extends 'base.html' %}
+
+{% block title %}{{ event.title }} - Events{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h1 class="card-title mb-0">{{ event.title }}</h1>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <strong><i class="fas fa-calendar me-2"></i>Date:</strong><br>
+                        {{ event.start_date|date:"l, F j, Y" }}
+                    </div>
+                    <div class="col-md-6">
+                        <strong><i class="fas fa-clock me-2"></i>Time:</strong><br>
+                        {{ event.start_date|time:"g:i A" }} - {{ event.end_date|time:"g:i A" }}
+                    </div>
+                </div>
+
+                {% if event.location %}
+                <div class="mb-3">
+                    <strong><i class="fas fa-map-marker-alt me-2"></i>Location:</strong><br>
+                    {{ event.location }}
+                </div>
+                {% endif %}
+
+                <div class="mb-3">
+                    <strong><i class="fas fa-info-circle me-2"></i>Description:</strong><br>
+                    <p class="mt-2">{{ event.description|linebreaks }}</p>
+                </div>
+
+                {% if event.max_attendees %}
+                <div class="mb-3">
+                    <strong><i class="fas fa-users me-2"></i>Capacity:</strong><br>
+                    {{ event.registrations.count }} / {{ event.max_attendees }} registered
+                    {% if event.available_spots %}
+                        <span class="badge bg-success ms-2">{{ event.available_spots }} spots left</span>
+                    {% elif event.available_spots == 0 %}
+                        <span class="badge bg-danger ms-2">Full</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                {% if event.registration_deadline %}
+                <div class="mb-3">
+                    <strong><i class="fas fa-clock me-2"></i>Registration Deadline:</strong><br>
+                    {{ event.registration_deadline|date:"F j, Y g:i A" }}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Registration</h5>
+            </div>
+            <div class="card-body">
+                {% if user.is_authenticated %}
+                    {% if user_registered %}
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle me-2"></i>
+                            You are registered for this event!
+                        </div>
+                        {% if not event.is_past %}
+                        <a href="{% url 'events:cancel' event.pk %}" class="btn btn-outline-danger btn-sm"
+                           onclick="return confirm('Are you sure you want to cancel your registration?')">
+                            <i class="fas fa-times me-1"></i>Cancel Registration
+                        </a>
+                        {% endif %}
+                    {% else %}
+                        {% if event.is_registration_open %}
+                            <p class="text-muted">Register for this event to secure your spot.</p>
+                            <a href="{% url 'events:register' event.pk %}" class="btn btn-primary">
+                                <i class="fas fa-plus me-1"></i>Register Now
+                            </a>
+                        {% else %}
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                Registration is closed.
+                            </div>
+                        {% endif %}
+                    {% endif %}
+                {% else %}
+                    <p class="text-muted">Please log in to register for this event.</p>
+                    <a href="{% url 'login' %}?next={{ request.path }}" class="btn btn-primary">
+                        <i class="fas fa-sign-in-alt me-1"></i>Login to Register
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if event.is_past %}
+        <div class="alert alert-info mt-3">
+            <i class="fas fa-history me-2"></i>
+            This event has already taken place.
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="mt-3">
+    <a href="{% url 'events:list' %}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i>Back to Events
+    </a>
+</div>
+{% endblock %}
