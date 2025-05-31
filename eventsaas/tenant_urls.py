@@ -27,7 +27,11 @@ urlpatterns = [
     path('accounts/signup/', signup, name='signup'),
     # path('', debug_request),
     path('', include('events.urls')),  # Events at root for tenants
+    path('api/', include('api.urls')),  # APIS tenants
+    
 ]
+
+
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

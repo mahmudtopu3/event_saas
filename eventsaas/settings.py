@@ -40,6 +40,9 @@ SHARED_APPS = [
     'django.contrib.messages',
     'django.contrib.admin',
     'django.contrib.staticfiles',
+    'corsheaders',
+    'rest_framework',
+    
 ]
 
 TENANT_APPS = [
@@ -57,11 +60,14 @@ TENANT_APPS = [
 
 INSTALLED_APPS = list(SHARED_APPS) + [app for app in TENANT_APPS if app not in SHARED_APPS]
 
-
+# Allow CORS for development
+CORS_ALLOW_ALL_ORIGINS = True  # Development only
+CORS_ALLOW_CREDENTIALS = True
 
 MIDDLEWARE = [
     'django_tenants.middleware.main.TenantMainMiddleware', # Must be first
     'eventsaas.middleware.TenantURLConfMiddleware', 
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',

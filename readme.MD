@@ -54,7 +54,8 @@ eventsaas/
 │   │   ├── __init__.py
 │   │   └── commands/
 │   │       ├── __init__.py
-│   │       └── create_company.py
+│   │       └── setup_public.py
+            └── setup_tenant.py
 │   ├── models.py
 │   ├── admin.py
 │   └── ...
@@ -95,7 +96,8 @@ Copy all the provided code files into their respective locations:
 - `events/admin.py` - Admin interface for events
 - `eventsaas/urls.py` and `eventsaas/tenant_urls.py` - URL configurations
 - All template files in the `templates/` directory
-- `companies/management/commands/create_company.py` - Management command
+- `companies/management/commands/setup_public.py` - Management command
+- `companies/management/commands/setup_tenant.py` - Management command
 
 ### 5. Run Migrations
 

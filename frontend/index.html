@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EventSaaS - Multi-Tenant Frontend</title>
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- Tailwind CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
+    <!-- Hide elements until Alpine has initialized -->
+    <style>
+      [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div 
+        x-data="eventApp()" 
+        x-init="init()" 
+        x-cloak 
+        class="min-h-screen"
+    >
+        <!-- Dynamic Header with Tenant Branding -->
+        <header class="text-white shadow-lg" :style="tenant && tenant.theme_color ? `background: ${tenant.theme_color}` : 'background: #007bff'">
+            <div class="container mx-auto px-4 py-6">
+                <div class="flex items-center justify-between">
+                    <!-- Logo + Title -->
+                    <div class="flex items-center space-x-4">
+                        <!-- Guarded logo: only bind src once tenant and tenant.logo exist -->
+                        <div x-show="tenant && tenant.logo" class="flex-shrink-0">
+                            <img 
+                                x-bind:src="tenant && tenant.logo ? `${backendUrl}${tenant.logo}` : ''"
+                                x-bind:alt="tenant ? tenant.name : 'logo placeholder'"
+                                class="h-10 w-auto"
+                            >
+                        </div>
+                        <!-- Default icon if no logo -->
+                        <div x-show="!tenant || !tenant.logo" class="flex-shrink-0">
+                            <i class="fas fa-calendar-alt text-2xl"></i>
+                        </div>
+                        <div>
+                            <h1 class="text-2xl font-bold" x-text="tenant ? tenant.name : 'EventSaaS'"></h1>
+                            <p class="text-sm opacity-90">Event Management Platform</p>
+                        </div>
+                    </div>
+
+                    <!-- Current Domain / Port Info -->
+                    <div class="text-right text-sm opacity-90">
+                        <i class="fas fa-globe mr-1"></i>
+                        <span x-text="currentDomain"></span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Loading State (initial tenant fetch) -->
+        <div x-show="loading" class="container mx-auto px-4 py-8">
+            <div class="text-center py-12">
+                <i class="fas fa-spinner fa-spin fa-3x text-blue-500 mb-4"></i>
+                <h2 class="text-xl font-semibold text-gray-700">Loading tenant data...</h2>
+                <p class="text-gray-500 mt-2">
+                    Connecting to: 
+                    <span x-text="backendUrl" class="font-mono"></span>
+                </p>
+            </div>
+        </div>
+
+        <!-- Error State (if tenant fetch fails) -->
+        <div x-show="!loading && error" class="container mx-auto px-4 py-8">
+            <div class="bg-red-50 border border-red-200 rounded-lg p-6">
+                <div class="flex items-center mb-4">
+                    <i class="fas fa-exclamation-triangle text-red-500 text-2xl mr-3"></i>
+                    <h2 class="text-xl font-bold text-red-800">Connection Error</h2>
+                </div>
+                <p class="text-red-700 mb-4" x-text="error"></p>
+                <div class="bg-white p-4 rounded border">
+                    <h3 class="font-semibold text-red-800 mb-2">Troubleshooting:</h3>
+                    <ul class="text-sm text-red-600 space-y-1">
+                        <li>• Make sure Django is running on port 8000</li>
+                        <li>• Check /etc/hosts configuration</li>
+                        <li>• Verify domain: <span x-text="currentDomain" class="font-mono"></span></li>
+                        <li>• Backend URL: <span x-text="backendUrl" class="font-mono"></span></li>
+                    </ul>
+                </div>
+                <button 
+                    @click="retryConnection()" 
+                    class="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                >
+                    <i class="fas fa-redo mr-2"></i>Retry Connection
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Content (only shown when tenant is loaded and no error) -->
+        <div x-show="!loading && !error && tenant" class="container mx-auto px-4 py-8">
+            <!-- Tenant Info Banner -->
+            <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-800" x-text="tenant.name"></h2>
+                        <p x-show="tenant.description" class="text-gray-600 mt-1" x-text="tenant.description"></p>
+                        <div class="flex items-center mt-2 space-x-4 text-sm text-gray-500">
+                            <span>
+                                <i class="fas fa-server mr-1"></i>
+                                Schema: <span x-text="tenant.schema_name" class="font-mono"></span>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-sm text-gray-500">
+                            <div>Frontend: <span x-text="currentDomain" class="font-mono"></span></div>
+                            <div>Backend: <span x-text="backendDomain" class="font-mono"></span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Events Section -->
+            <div class="mb-8">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-3xl font-bold text-gray-800">
+                        <i class="fas fa-calendar-alt mr-3"></i>Upcoming Events
+                    </h2>
+                    <button 
+                        @click="loadEvents()" 
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        :disabled="loadingEvents"
+                    >
+                        <i class="fas fa-sync-alt mr-2" :class="{'fa-spin': loadingEvents}"></i>
+                        Refresh Events
+                    </button>
+                </div>
+
+                <!-- Events Loading Spinner -->
+                <div x-show="loadingEvents" class="text-center py-8">
+                    <i class="fas fa-spinner fa-spin fa-2x text-blue-500 mb-4"></i>
+                    <p class="text-gray-600">Loading events from backend...</p>
+                </div>
+
+                <!-- Events Grid -->
+                <div 
+                    x-show="!loadingEvents && events.length > 0" 
+                    class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+                >
+                    <template x-for="event in events" :key="event.id">
+                        <div class="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+                            <div 
+                                class="h-2"
+                                :style="tenant && tenant.theme_color ? `background-color: ${tenant.theme_color}` : 'background-color: #007bff'"
+                            ></div>
+                            <div class="p-6">
+                                <h3 class="text-xl font-bold text-gray-800 mb-2" x-text="event.title || 'Untitled Event'"></h3>
+                                <p class="text-gray-600 mb-4" x-text="event.description || 'No description available'"></p>
+                                
+                                <div class="space-y-2 text-sm text-gray-500">
+                                    <div class="flex items-center">
+                                        <i class="fas fa-calendar mr-2 w-4"></i>
+                                        <span x-text="formatDate(event.start_date)"></span>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <i class="fas fa-clock mr-2 w-4"></i>
+                                        <span x-text="formatTime(event.start_date)"></span>
+                                    </div>
+                                    <div x-show="event.location" class="flex items-center">
+                                        <i class="fas fa-map-marker-alt mr-2 w-4"></i>
+                                        <span x-text="event.location"></span>
+                                    </div>
+                                    <div x-show="event.max_attendees" class="flex items-center">
+                                        <i class="fas fa-users mr-2 w-4"></i>
+                                        <span x-text="`${event.registrations_count || 0}/${event.max_attendees} registered`"></span>
+                                    </div>
+                                </div>
+
+                                <div class="mt-4 flex items-center justify-between">
+                                    <span 
+                                        class="px-2 py-1 text-xs font-semibold rounded-full"
+                                        :class="{
+                                            'bg-green-100 text-green-800': event.status === 'published',
+                                            'bg-yellow-100 text-yellow-800': event.status === 'draft',
+                                            'bg-red-100 text-red-800': event.status === 'cancelled'
+                                        }"
+                                        x-text="event.status || 'unknown'"
+                                    ></span>
+                                    <button 
+                                        class="px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors"
+                                        :style="tenant && tenant.theme_color ? `background-color: ${tenant.theme_color}` : 'background-color: #007bff'"
+                                        @click="viewEvent(event)"
+                                    >
+                                        View Details
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- No Events State -->
+                <div x-show="!loadingEvents && events.length === 0 && !eventsError" class="text-center py-12">
+                    <i class="fas fa-calendar-times fa-4x text-gray-400 mb-4"></i>
+                    <h3 class="text-xl font-semibold text-gray-600 mb-2">No Events Found</h3>
+                    <p class="text-gray-500">This tenant doesn't have any published events yet.</p>
+                </div>
+
+                <!-- Events Error -->
+                <div x-show="eventsError" class="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+                    <div class="flex items-center mb-2">
+                        <i class="fas fa-exclamation-triangle text-yellow-500 mr-2"></i>
+                        <h3 class="font-semibold text-yellow-800">Unable to Load Events</h3>
+                    </div>
+                    <p class="text-yellow-700" x-text="eventsError"></p>
+                </div>
+            </div>
+
+            <!-- API Status -->
+            <div class="bg-gray-50 rounded-lg p-4">
+                <h3 class="font-semibold text-gray-700 mb-2">
+                    <i class="fas fa-info-circle mr-2"></i>Connection Status
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                        <strong>Frontend Domain:</strong> <span x-text="currentDomain" class="font-mono"></span>
+                    </div>
+                    <div>
+                        <strong>Backend API:</strong> <span x-text="backendUrl" class="font-mono"></span>
+                    </div>
+                    <div>
+                        <strong>Tenant Status:</strong> 
+                        <span class="text-green-600" x-show="tenant">✓ Connected</span>
+                        <span class="text-red-600" x-show="!tenant">✗ Not Connected</span>
+                    </div>
+                    <div>
+                        <strong>Events API:</strong>
+                        <span class="text-green-600" x-show="events.length > 0">✓ Working</span>
+                        <span class="text-yellow-600" x-show="events.length === 0 && !eventsError">⚠ No Data</span>
+                        <span class="text-red-600" x-show="eventsError">✗ Error</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function eventApp() {
+            return {
+                // State
+                currentDomain: '',
+                backendDomain: '',
+                backendUrl: '',
+                tenant: null,
+                events: [],
+                loading: true,
+                loadingEvents: false,
+                error: null,
+                eventsError: null,
+
+                // Initialize Alpine component
+                async init() {
+                    // Determine domains/ports
+                    this.currentDomain = window.location.host;
+                    this.backendDomain = this.currentDomain.replace(':4000', ':8000');
+                    this.backendUrl = `http://${this.backendDomain}`;
+
+                    // First, load tenant; then, if successful, load events
+                    await this.loadTenant();
+                    if (this.tenant) {
+                        await this.loadEvents();
+                    }
+                },
+
+                // Fetch tenant info from backend
+                async loadTenant() {
+                    this.loading = true;
+                    this.error = null;
+
+                    try {
+                        const response = await fetch(`${this.backendUrl}/api/tenant-info/`, {
+                            method: 'GET',
+                            headers: {
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json',
+                            },
+                            mode: 'cors'
+                        });
+
+                        if (!response.ok) {
+                            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                        }
+
+                        this.tenant = await response.json();
+                        document.title = `${this.tenant.name} - Events`;
+                    } catch (err) {
+                        this.error = `Failed to connect to ${this.backendUrl}. ${err.message}`;
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                // Fetch events from backend
+                async loadEvents() {
+                    this.loadingEvents = true;
+                    this.eventsError = null;
+
+                    try {
+                        const response = await fetch(`${this.backendUrl}/api/events/`, {
+                            method: 'GET',
+                            headers: {
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json',
+                            },
+                            mode: 'cors'
+                        });
+
+                        if (!response.ok) {
+                            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                        }
+
+                        const data = await response.json();
+                        // Some backends wrap results in `results` array
+                        this.events = Array.isArray(data) ? data : (data.results || []);
+                    } catch (err) {
+                        this.eventsError = `Failed to load events: ${err.message}`;
+                    } finally {
+                        this.loadingEvents = false;
+                    }
+                },
+
+                // Retry both tenant + events fetch
+                async retryConnection() {
+                    await this.init();
+                },
+
+                // Format date for display
+                formatDate(dateString) {
+                    if (!dateString) return 'No date';
+                    return new Date(dateString).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                    });
+                },
+
+                // Format time for display
+                formatTime(dateString) {
+                    if (!dateString) return 'No time';
+                    return new Date(dateString).toLocaleTimeString('en-US', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                },
+
+                // Simple event detail popup
+                viewEvent(event) {
+                    alert(`Event: ${event.title}\nDate: ${this.formatDate(event.start_date)}\nStatus: ${event.status}`);
+                }
+            }
+        }
+    </script>
+</body>
+</html>
