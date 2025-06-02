@@ -41,8 +41,10 @@
                         <p>
                             {% if company.on_trial %}
                                 <span class="badge bg-warning">Trial Account</span>
-                            {% else %}
+                            {% elif company.is_active_subscription %}
                                 <span class="badge bg-success">Active Subscription</span>
+                            {% else %}
+                                <span class="badge bg-danger">Inactive</span>
                             {% endif %}
                         </p>
                     </div>

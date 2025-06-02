@@ -67,6 +67,7 @@ CORS_ALLOW_CREDENTIALS = True
 MIDDLEWARE = [
     'django_tenants.middleware.main.TenantMainMiddleware', # Must be first
     'eventsaas.middleware.TenantURLConfMiddleware', 
+    'companies.middleware.SubscriptionMiddleware', 
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',

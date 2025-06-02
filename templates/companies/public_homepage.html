@@ -86,8 +86,10 @@
                         <div class="mb-3">
                             {% if company.on_trial %}
                                 <span class="badge bg-warning">Trial</span>
-                            {% else %}
+                            {% elif company.is_active_subscription %}
                                 <span class="badge bg-success">Active</span>
+                            {% else %}
+                                <span class="badge bg-danger">Inactive</span>
                             {% endif %}
                             
                             {% if company.contact_email %}

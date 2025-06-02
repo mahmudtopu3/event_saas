@@ -6,18 +6,31 @@ from django_tenants.utils import get_tenant
 from .models import Company, Domain
 
 class SecureCompanyAdmin(admin.ModelAdmin):
-    list_display = ('name', 'schema_name', 'on_trial', 'paid_until', 'created_at', 'view_users_link')
-    list_filter = ('on_trial', 'created_at', 'paid_until')
+    list_display = (
+        'name',
+        'schema_name',
+        'subscription_status',  # Custom method to show status with colors
+        'on_trial',
+        'paid_until',
+        'created_at',
+        'view_users_link'
+    )
+    list_filter = (
+        'on_trial',
+        'created_at',
+        'paid_until',
+        'is_active_subscription',  # Allow filtering by active/inactive
+    )
     search_fields = ('name', 'schema_name', 'contact_email')
     readonly_fields = ('schema_name', 'created_at', 'view_users_link', 'view_company_link')
     
     fieldsets = (
         ('Company Information', {
-            'fields': ('name', 'schema_name', 'contact_email', 'on_trial')
+            'fields': ('name', 'schema_name', 'contact_email')
         }),
-        ('Billing Information', {
-            'fields': ('paid_until',),
-            'classes': ('collapse',)
+        ('Subscription Management', {
+            'fields': ('is_active_subscription', 'on_trial', 'paid_until'),
+            'description': 'Control access to this tenant\'s site',
         }),
         ('Timestamps', {
             'fields': ('created_at',),
@@ -28,6 +41,19 @@ class SecureCompanyAdmin(admin.ModelAdmin):
             'description': 'Quick links to view company details and manage users',
         }),
     )
+    
+    def subscription_status(self, obj):
+        """Display subscription status with color coding"""
+        if obj.is_active_subscription:
+            return format_html(
+                '<span style="color: green; font-weight: bold;">✓ Active</span>'
+            )
+        else:
+            return format_html(
+                '<span style="color: red; font-weight: bold;">✗ Inactive</span>'
+            )
+    subscription_status.short_description = "Subscription"
+    subscription_status.admin_order_field = 'is_active_subscription'
     
     def get_queryset(self, request):
         """Only show companies in public schema (super admin only)"""
@@ -73,8 +99,20 @@ class SecureCompanyAdmin(admin.ModelAdmin):
         return "-"
     view_company_link.short_description = "Company Page"
 
-    # Add custom admin actions
-    actions = ['mark_as_trial', 'mark_as_active', 'view_all_users']
+    # Add custom admin actions for subscription management
+    actions = ['activate_subscription', 'deactivate_subscription', 'mark_as_trial', 'mark_as_active']
+
+    def activate_subscription(self, request, queryset):
+        """Activate subscription for selected companies"""
+        updated = queryset.update(is_active_subscription=True)
+        self.message_user(request, f'{updated} companies activated. Their sites are now accessible.')
+    activate_subscription.short_description = "✓ Activate subscription for selected companies"
+
+    def deactivate_subscription(self, request, queryset):
+        """Deactivate subscription for selected companies"""
+        updated = queryset.update(is_active_subscription=False)
+        self.message_user(request, f'{updated} companies deactivated. Their sites are now blocked.')
+    deactivate_subscription.short_description = "✗ Deactivate subscription for selected companies"
 
     def mark_as_trial(self, request, queryset):
         """Mark selected companies as trial"""
@@ -88,27 +126,21 @@ class SecureCompanyAdmin(admin.ModelAdmin):
         self.message_user(request, f'{updated} companies marked as active.')
     mark_as_active.short_description = "Mark selected companies as active"
 
-    def view_all_users(self, request, queryset):
-        """Custom action to view users for selected companies"""
-        if queryset.count() == 1:
-            company = queryset.first()
-            url = reverse('company_users', kwargs={'schema_name': company.schema_name})
-            self.message_user(request, 
-                format_html(
-                    'View users for {}: <a href="{}" target="_blank">Open Users Page</a>',
-                    company.name, url
-                ),
-                extra_tags='safe'
-            )
-        else:
-            self.message_user(request, 'Please select only one company to view users.')
-    view_all_users.short_description = "View users for selected company"
-
 
 class SecureDomainAdmin(admin.ModelAdmin):
-    list_display = ('domain', 'tenant', 'is_primary', 'tenant_users_link')
+    list_display = ('domain', 'tenant', 'is_primary', 'tenant_status', 'tenant_users_link')
     list_filter = ('is_primary',)
     search_fields = ('domain', 'tenant__name')
+    
+    def tenant_status(self, obj):
+        """Show the subscription status of the tenant this domain belongs to"""
+        if obj.tenant:
+            if obj.tenant.is_active_subscription:
+                return format_html('<span style="color: green;">✓ Active</span>')
+            else:
+                return format_html('<span style="color: red;">✗ Inactive</span>')
+        return "-"
+    tenant_status.short_description = "Tenant Status"
     
     def get_queryset(self, request):
         """Only show domains in public schema"""
@@ -135,6 +167,7 @@ class SecureDomainAdmin(admin.ModelAdmin):
             )
         return "-"
     tenant_users_link.short_description = "Users"
+
 
 # Register only in public schema
 admin.site.register(Company, SecureCompanyAdmin)

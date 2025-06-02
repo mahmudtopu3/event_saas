@@ -1,0 +1,132 @@
+{# templates/subscriptions/company_not_found.html #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Company Not Found</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .error-container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            padding: 3rem;
+            max-width: 500px;
+            text-align: center;
+            animation: fadeInUp 0.8s ease-out;
+        }
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .error-icon {
+            font-size: 4rem;
+            color: #dc3545;
+            margin-bottom: 1.5rem;
+        }
+        .error-code {
+            font-size: 3rem;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 1rem;
+        }
+        .error-message {
+            color: #2c3e50;
+            font-size: 1.1rem;
+            margin-bottom: 1.5rem;
+            line-height: 1.6;
+        }
+        .help-section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            text-align: left;
+        }
+        .btn-gradient {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 50px;
+            color: white;
+            text-decoration: none;
+            display: inline-block;
+            margin-top: 1rem;
+            transition: transform 0.3s ease;
+        }
+        .btn-gradient:hover {
+            transform: translateY(-2px);
+            color: white;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="error-container">
+        <div class="error-icon">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+        </div>
+        
+        <div class="error-code">404</div>
+        
+        <h2 class="fw-bold mb-3">Company Not Found</h2>
+        
+        <div class="error-message">
+            The requested tenant site does not exist or has been removed from our system.
+        </div>
+
+        <div class="help-section">
+            <h6 class="fw-bold mb-3">
+                <i class="bi bi-lightbulb me-2"></i>What you can do:
+            </h6>
+            <ul class="list-unstyled">
+                <li class="mb-2">
+                    <i class="bi bi-arrow-right text-primary me-2"></i>
+                    Check the URL for any typos
+                </li>
+                <li class="mb-2">
+                    <i class="bi bi-arrow-right text-primary me-2"></i>
+                    Contact the site owner for the correct address
+                </li>
+                <li class="mb-2">
+                    <i class="bi bi-arrow-right text-primary me-2"></i>
+                    Reach out to our support team if you believe this is an error
+                </li>
+            </ul>
+        </div>
+
+        <div class="mt-4">
+            <a href="mailto:support@eventsaas.com" class="btn-gradient">
+                <i class="bi bi-envelope me-2"></i>Contact Support
+            </a>
+        </div>
+
+        <div class="mt-4">
+            <small class="text-muted d-block">
+                Error occurred while accessing tenant site
+            </small>
+            <small class="text-muted">
+                Powered by Event SaaS Platform
+            </small>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
