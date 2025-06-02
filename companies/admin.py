@@ -1,13 +1,33 @@
 from django.contrib import admin
 from django.http import Http404
+from django.urls import reverse
+from django.utils.html import format_html
 from django_tenants.utils import get_tenant
 from .models import Company, Domain
 
 class SecureCompanyAdmin(admin.ModelAdmin):
-    list_display = ('name', 'schema_name', 'on_trial', 'paid_until', 'created_at')
+    list_display = ('name', 'schema_name', 'on_trial', 'paid_until', 'created_at', 'view_users_link')
     list_filter = ('on_trial', 'created_at', 'paid_until')
     search_fields = ('name', 'schema_name', 'contact_email')
-    readonly_fields = ('schema_name', 'created_at')
+    readonly_fields = ('schema_name', 'created_at', 'view_users_link', 'view_company_link')
+    
+    fieldsets = (
+        ('Company Information', {
+            'fields': ('name', 'schema_name', 'contact_email', 'on_trial')
+        }),
+        ('Billing Information', {
+            'fields': ('paid_until',),
+            'classes': ('collapse',)
+        }),
+        ('Timestamps', {
+            'fields': ('created_at',),
+            'classes': ('collapse',)
+        }),
+        ('Quick Actions', {
+            'fields': ('view_users_link', 'view_company_link'),
+            'description': 'Quick links to view company details and manage users',
+        }),
+    )
     
     def get_queryset(self, request):
         """Only show companies in public schema (super admin only)"""
@@ -23,9 +43,70 @@ class SecureCompanyAdmin(admin.ModelAdmin):
         """Only show this admin in public schema"""
         tenant = get_tenant(request)
         return tenant.schema_name == 'public'
+    
+    def view_users_link(self, obj):
+        """Add a clickable link to view users for this company"""
+        if obj.schema_name:
+            url = reverse('company_users', kwargs={'schema_name': obj.schema_name})
+            return format_html(
+                '<a href="{}" class="button" target="_blank" style="'
+                'background: #417690; color: white; padding: 5px 10px; '
+                'text-decoration: none; border-radius: 4px; font-size: 11px;">'
+                '👥 View Users</a>',
+                url
+            )
+        return "-"
+    view_users_link.short_description = "Tenant Users"
+    view_users_link.admin_order_field = 'schema_name'
+
+    def view_company_link(self, obj):
+        """Add a clickable link to view company detail page"""
+        if obj.schema_name:
+            url = reverse('company_detail', kwargs={'schema_name': obj.schema_name})
+            return format_html(
+                '<a href="{}" class="button" target="_blank" style="'
+                'background: #28a745; color: white; padding: 5px 10px; '
+                'text-decoration: none; border-radius: 4px; font-size: 11px;">'
+                '🏢 View Details</a>',
+                url
+            )
+        return "-"
+    view_company_link.short_description = "Company Page"
+
+    # Add custom admin actions
+    actions = ['mark_as_trial', 'mark_as_active', 'view_all_users']
+
+    def mark_as_trial(self, request, queryset):
+        """Mark selected companies as trial"""
+        updated = queryset.update(on_trial=True)
+        self.message_user(request, f'{updated} companies marked as trial.')
+    mark_as_trial.short_description = "Mark selected companies as trial"
+
+    def mark_as_active(self, request, queryset):
+        """Mark selected companies as active (not trial)"""
+        updated = queryset.update(on_trial=False)
+        self.message_user(request, f'{updated} companies marked as active.')
+    mark_as_active.short_description = "Mark selected companies as active"
+
+    def view_all_users(self, request, queryset):
+        """Custom action to view users for selected companies"""
+        if queryset.count() == 1:
+            company = queryset.first()
+            url = reverse('company_users', kwargs={'schema_name': company.schema_name})
+            self.message_user(request, 
+                format_html(
+                    'View users for {}: <a href="{}" target="_blank">Open Users Page</a>',
+                    company.name, url
+                ),
+                extra_tags='safe'
+            )
+        else:
+            self.message_user(request, 'Please select only one company to view users.')
+    view_all_users.short_description = "View users for selected company"
+
 
 class SecureDomainAdmin(admin.ModelAdmin):
-    list_display = ('domain', 'tenant', 'is_primary')
+    list_display = ('domain', 'tenant', 'is_primary', 'tenant_users_link')
     list_filter = ('is_primary',)
     search_fields = ('domain', 'tenant__name')
     
@@ -42,6 +123,18 @@ class SecureDomainAdmin(admin.ModelAdmin):
         """Only show this admin in public schema"""
         tenant = get_tenant(request)
         return tenant.schema_name == 'public'
+    
+    def tenant_users_link(self, obj):
+        """Add link to view users for the tenant this domain belongs to"""
+        if obj.tenant and obj.tenant.schema_name:
+            url = reverse('company_users', kwargs={'schema_name': obj.tenant.schema_name})
+            return format_html(
+                '<a href="{}" target="_blank" style="color: #417690; text-decoration: none;">'
+                '👥 Users</a>',
+                url
+            )
+        return "-"
+    tenant_users_link.short_description = "Users"
 
 # Register only in public schema
 admin.site.register(Company, SecureCompanyAdmin)

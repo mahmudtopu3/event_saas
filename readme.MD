@@ -117,8 +117,8 @@ python manage.py createsuperuser
 
 ```bash
 # Create companies with their domains
-python manage.py create_company "ABC Corporation" abc.localhost
-python manage.py create_company "XYZ Limited" xyz.localhost
+python manage.py setup_tenant "ABC Corporation" abc.localhost
+python manage.py setup_tenant "XYZ Limited" xyz.localhost
 
 # Migrate tenant schemas (creates tables for each company)
 python manage.py migrate_schemas

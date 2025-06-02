@@ -7,7 +7,7 @@ from django_tenants.utils import get_tenant
 from django.conf.urls.static import static
 from django.conf import settings
 
-from companies.views import company_detail, public_homepage
+from companies.views import company_detail, company_users, public_homepage
 
 
 def debug_request(request):
@@ -25,6 +25,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),  # Super admin for managing companies
     path('company/<str:schema_name>/', company_detail, name='company_detail'),  # Individual company pages
     path('', public_homepage, name='public_homepage'),  # Portfolio homepage
+    path('company/<str:schema_name>/users/', company_users, name='company_users'),
     # path('', debug_request),
 ]
 

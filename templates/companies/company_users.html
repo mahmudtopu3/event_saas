@@ -1,0 +1,233 @@
+{# templates/companies/company_users.html #}
+{% extends "companies/base_public.html" %}
+{% load static %}
+
+{% block title %}
+    {{ company.name }} – Staff Users
+{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+<style>
+    .gradient-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+    
+    .user-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+    
+    .table-hover tbody tr:hover {
+        background-color: rgba(102, 126, 234, 0.05);
+        transform: translateY(-1px);
+        transition: all 0.2s ease;
+    }
+    
+    .stat-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+    }
+    
+    .empty-state {
+        background: #f8f9fa;
+        border: 2px dashed #dee2e6;
+        border-radius: 12px;
+        padding: 3rem;
+        text-align: center;
+        color: #6c757d;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <!-- Header Section -->
+    <div class="gradient-header rounded-4 p-4 mb-4 shadow">
+        <div class="row align-items-center">
+            <div class="col">
+                <h1 class="display-6 fw-bold mb-1">
+                    <i class="bi bi-building me-2"></i>{{ company.name }}
+                </h1>
+                <p class="lead mb-0 opacity-90">Tenant Admin Users</p>
+            </div>
+            <div class="col-auto">
+                <div class="d-flex gap-2">
+                    <a href="{% url 'company_detail' company.schema_name %}" class="btn btn-light">
+                        <i class="bi bi-arrow-left me-1"></i>Back to Company
+                    </a>
+                    <a href="{% url 'public_homepage' %}" class="btn btn-outline-light">
+                        <i class="bi bi-house me-1"></i>All Companies
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if users %}
+        <!-- Public Admin Badge -->
+        {% if is_public_admin %}
+        <div class="alert alert-info d-flex align-items-center mb-4" role="alert">
+            <i class="bi bi-shield-check me-2"></i>
+            <div>
+                <strong>Public Admin View:</strong> You are viewing users from the <strong>{{ company.name }}</strong> tenant as a public administrator.
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Statistics Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3 col-sm-6 mb-3">
+                <div class="card stat-card border-0 shadow-sm h-100">
+                    <div class="card-body text-center">
+                        <div class="display-4 text-primary fw-bold">{{ total_users|default:0 }}</div>
+                        <h6 class="card-title text-muted text-uppercase">Total Users</h6>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6 mb-3">
+                <div class="card stat-card border-0 shadow-sm h-100">
+                    <div class="card-body text-center">
+                        <div class="display-4 text-success fw-bold">{{ superusers|default:0 }}</div>
+                        <h6 class="card-title text-muted text-uppercase">Superusers</h6>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6 mb-3">
+                <div class="card stat-card border-0 shadow-sm h-100">
+                    <div class="card-body text-center">
+                        <div class="display-4 text-info fw-bold">{{ staff_users|default:0 }}</div>
+                        <h6 class="card-title text-muted text-uppercase">Staff Users</h6>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6 mb-3">
+                <div class="card stat-card border-0 shadow-sm h-100">
+                    <div class="card-body text-center">
+                        <div class="display-4 text-warning fw-bold">{{ active_users|default:0 }}</div>
+                        <h6 class="card-title text-muted text-uppercase">Active Users</h6>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Users Table -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-light border-0 py-3">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-people-fill me-2 text-primary"></i>Staff Users
+                        </h5>
+                    </div>
+                    <div class="col-auto">
+                        <span class="badge bg-primary rounded-pill">{{ total_users|default:0 }} user{{ total_users|default:0|pluralize }}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="border-0 text-uppercase fw-semibold text-muted small ps-4">
+                                    <i class="bi bi-person me-1"></i>User
+                                </th>
+                                <th class="border-0 text-uppercase fw-semibold text-muted small">
+                                    <i class="bi bi-envelope me-1"></i>Email
+                                </th>
+                                <th class="border-0 text-uppercase fw-semibold text-muted small">
+                                    <i class="bi bi-shield-check me-1"></i>Permissions
+                                </th>
+                                <th class="border-0 text-uppercase fw-semibold text-muted small">
+                                    <i class="bi bi-clock me-1"></i>Last Login
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in users %}
+                                <tr>
+                                    <td class="align-middle ps-4">
+                                        <div class="d-flex align-items-center">
+                                            <div class="user-avatar me-3">
+                                                {{ user.username|first|upper }}
+                                            </div>
+                                            <div>
+                                                <div class="fw-semibold text-dark">{{ user.username }}</div>
+                                                {% if user.first_name or user.last_name %}
+                                                    <small class="text-muted">{{ user.first_name }} {{ user.last_name }}</small>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="align-middle">
+                                        <span class="text-primary">{{ user.email }}</span>
+                                    </td>
+                                    <td class="align-middle">
+                                        {% if user.is_superuser %}
+                                            <span class="badge bg-danger rounded-pill">
+                                                <i class="bi bi-shield-fill-exclamation me-1"></i>Superuser
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-secondary rounded-pill">
+                                                <i class="bi bi-person-badge me-1"></i>Staff
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="align-middle">
+                                        {% if user.last_login %}
+                                            <div class="d-flex flex-column">
+                                                <span class="fw-medium">{{ user.last_login|date:"M d, Y" }}</span>
+                                                <small class="text-muted">{{ user.last_login|date:"H:i" }}</small>
+                                            </div>
+                                        {% else %}
+                                            <span class="badge bg-warning text-dark rounded-pill">
+                                                <i class="bi bi-exclamation-triangle me-1"></i>Never
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <!-- Empty State -->
+        <div class="empty-state">
+            <div class="mb-4">
+                <i class="bi bi-person-x display-1 opacity-50"></i>
+            </div>
+            <h3 class="fw-bold mb-3">No Staff Users Found</h3>
+            <p class="lead mb-4">This company doesn't have any staff users configured yet.</p>
+            <div class="d-flex gap-2 justify-content-center">
+                <a href="{% url 'company_detail' company.schema_name %}" class="btn btn-primary">
+                    <i class="bi bi-arrow-left me-1"></i>Back to Company Details
+                </a>
+                <a href="{% url 'public_homepage' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-house me-1"></i>View All Companies
+                </a>
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+{% endblock %}
