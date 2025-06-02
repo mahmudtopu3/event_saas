@@ -1,0 +1,56 @@
+{# templates/companies/tenant_orders.html #}
+
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}My Orders{% endblock %}
+
+{% block content %}
+  <h2>My Subscription Orders</h2>
+
+  <table border="1" cellpadding="8" cellspacing="0">
+    <thead>
+      <tr>
+        <th>Order #</th>
+        <th>Plan</th>
+        <th>Status</th>
+        <th>Total</th>
+        <th>Billing</th>
+        <th>Created At</th>
+        <th>Approved At</th>
+        <th>Paid At</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for order in orders %}
+        <tr>
+          <td>{{ order.id }}</td>
+          <td>{{ order.plan.name }}</td>
+          <td>{{ order.get_status_display }}</td>
+          <td>${{ order.total_amount }}</td>
+          <td>{{ order.get_billing_period_display }}</td>
+          <td>{{ order.created_at|date:"Y-m-d H:i" }}</td>
+          <td>
+            {% if order.approved_at %}
+              {{ order.approved_at|date:"Y-m-d H:i" }}
+            {% else %}
+              —
+            {% endif %}
+          </td>
+          <td>
+            {% if order.paid_at %}
+              {{ order.paid_at|date:"Y-m-d H:i" }}
+            {% else %}
+              —
+            {% endif %}
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="8">You have not placed any orders yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p style="margin-top:1rem;">
+    <a href="{% url 'view_plans' %}">← Place a New Order</a>
+  </p>
+{% endblock %}

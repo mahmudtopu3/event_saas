@@ -1,0 +1,13 @@
+{# templates/companies/order_thankyou.html #}
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Thank You{% endblock %}
+
+{% block content %}
+  <h2>Thank You for Submitting Your Order!</h2>
+  <p>Your subscription request is now <strong>Pending Approval</strong>. The site administrator will review it and let you know shortly.</p>
+  <p>
+    <a href="{% url 'view_orders' %}">&larr; View Your Order Status</a>
+  </p>
+{% endblock %}

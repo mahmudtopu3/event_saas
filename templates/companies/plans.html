@@ -1,0 +1,56 @@
+{# templates/companies/plans.html #}
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Subscription Plans{% endblock %}
+
+{% block content %}
+  <h2>Choose a Subscription Plan</h2>
+
+  <p>
+    Your current plan:
+    {% if company.current_plan %}
+      <strong>{{ company.current_plan.name }}</strong> —
+      Expires on {{ company.paid_until|date:"Y-m-d" }}
+      {% if company.paid_until and company.paid_until < now|date:"Y-m-d" %}
+        <span style="color: red;">(Expired)</span>
+      {% endif %}
+    {% else %}
+      <em>No active plan</em>
+    {% endif %}
+  </p>
+
+  <form method="post" action="{% url 'tenant_order' %}">
+    {% csrf_token %}
+    <table border="1" cellpadding="8" cellspacing="0">
+      <thead>
+        <tr>
+          <th>Plan Name</th>
+          <th>Price</th>
+          <th>Billing</th>
+          <th>Features</th>
+          <th>Select</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for plan in plans %}
+          <tr>
+            <td>{{ plan.name }}</td>
+            <td>${{ plan.price }}</td>
+            <td>{{ plan.get_billing_period_display }}</td>
+            <td style="white-space: pre-line;">{{ plan.features }}</td>
+            <td>
+              <input type="radio" name="plan_id" value="{{ plan.id }}" required>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5">No active plans available.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <button type="submit" style="margin-top:1rem;">Place Order</button>
+  </form>
+  <p style="margin-top:2rem;">
+    <a href="{% url 'view_orders' %}">View My Orders</a>
+  </p>
+{% endblock %}

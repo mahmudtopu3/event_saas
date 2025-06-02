@@ -1,0 +1,41 @@
+{# templates/subscriptions/admin_blocked.html #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Access Denied</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      padding-top: 5rem;
+      color: #333;
+    }
+    .container {
+      display: inline-block;
+      text-align: left;
+      max-width: 400px;
+      border: 1px solid #ddd;
+      padding: 2rem;
+      border-radius: 8px;
+      background: #fafafa;
+    }
+    h1 {
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+      color: red;
+    }
+    p {
+      font-size: 1rem;
+      margin-bottom: 1.5rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Access Denied</h1>
+    <p>The administration portal is not available on this tenant.</p>
+    <p>If you wish to change your subscription, please <a href="/plans/">view plans</a> or <a href="/accounts/login/">log in</a>.</p>
+  </div>
+</body>
+</html>

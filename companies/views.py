@@ -1,9 +1,11 @@
 # companies/views.py
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.http import Http404
-from .models import Company, Domain
+from .models import Company, Domain, Order, Plan
 from django_tenants.utils import get_tenant, schema_context
 from django.contrib.auth import get_user_model
+from django.contrib.auth.decorators import login_required
+from django.utils import timezone
 
 
 def public_homepage(request):
@@ -121,3 +123,145 @@ def company_users(request, schema_name):
     }
     
     return render(request, "companies/company_users.html", context)
+
+
+def view_plans(request):
+    """
+    Tenant‐schema: List all active Plans so that a tenant may choose one.
+    Also shows the tenant’s current subscription status.
+    """
+    tenant = get_tenant(request)
+    if tenant.schema_name == 'public':
+        # Public schema should not see this page
+        raise Http404("Page not found")
+
+    # Fetch Company record from PUBLIC schema
+    with schema_context('public'):
+        try:
+            company = Company.objects.get(schema_name=tenant.schema_name)
+        except Company.DoesNotExist:
+            raise Http404("Company not found in public schema")
+
+        plans = Plan.objects.filter(is_active=True)
+
+    return render(request, 'companies/plans.html', {
+        'company': company,
+        'plans': plans,
+    })
+
+
+@login_required
+def tenant_order(request):
+    """
+    Tenant‐schema: POST to place a new Order for the current Plan.
+    If method=GET, redirect to view_plans.
+    """
+    tenant = get_tenant(request)
+    if tenant.schema_name == 'public':
+        raise Http404("Page not found")
+
+    if request.method != 'POST':
+        return redirect('view_plans')
+
+    plan_id = request.POST.get('plan_id')
+    if not plan_id:
+        return redirect('view_plans')
+
+    # In PUBLIC schema, create a new Order tied to this Company
+    with schema_context('public'):
+        try:
+            company = Company.objects.get(schema_name=tenant.schema_name)
+            plan = Plan.objects.get(pk=plan_id, is_active=True)
+        except (Company.DoesNotExist, Plan.DoesNotExist):
+            raise Http404("Invalid company or plan")
+
+        total = plan.price
+        billing = plan.billing_period
+
+        # Create the Order (status='pending' by default)
+        Order.objects.create(
+            company=company,
+            plan=plan,
+            total_amount=total,
+            billing_period=billing,
+        )
+
+    return redirect('order_thankyou')
+
+
+def order_thankyou(request):
+    """Simple thank‐you page after placing an order."""
+    tenant = get_tenant(request)
+    if tenant.schema_name == 'public':
+        raise Http404("Page not found")
+
+    return render(request, 'companies/order_thankyou.html')
+
+
+@login_required
+def view_orders(request):
+    """
+    Tenant‐schema: Show all Orders for this tenant (Company) and their statuses.
+    """
+    tenant = get_tenant(request)
+    if tenant.schema_name == 'public':
+        raise Http404("Page not found")
+
+    with schema_context('public'):
+        try:
+            company = Company.objects.get(schema_name=tenant.schema_name)
+        except Company.DoesNotExist:
+            raise Http404("Company not found")
+
+        orders = Order.objects.filter(company=company).order_by('-created_at')
+
+    return render(request, 'companies/tenant_orders.html', {
+        'company': company,
+        'orders': orders,
+    })
+
+
+def subscription_check(request):
+    """
+    This view handles inactive subscription display.
+    Shows appropriate content based on user authentication status.
+    """
+    tenant = get_tenant(request)
+    next_url = request.GET.get('next', '/')
+    
+    # Get company info
+    try:
+        with schema_context('public'):
+            company = Company.objects.get(schema_name=tenant.schema_name)
+    except Company.DoesNotExist:
+        return render(request, 'subscriptions/company_not_found.html', status=404)
+
+    # Check if subscription is actually active now
+    now_date = timezone.now().date()
+    is_active = (
+        company.is_active_subscription and
+        (not company.paid_until or company.paid_until >= now_date)
+    )
+
+    # If subscription became active, redirect to original destination
+    if is_active:
+        return redirect(next_url)
+
+    # Get user's orders if authenticated
+    orders = None
+    if request.user.is_authenticated:
+        with schema_context('public'):
+            orders = Order.objects.filter(company=company).order_by('-created_at')[:5]
+
+    context = {
+        'company': company,
+        'tenant': tenant,
+        'next_url': next_url,
+        'orders': orders,
+        'login_url': '/accounts/login/',
+        'plans_url': '/plans/',
+        'order_url': '/orders/',
+        'is_authenticated': request.user.is_authenticated,
+    }
+
+    return render(request, 'subscriptions/inactive.html', context)
