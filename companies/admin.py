@@ -200,25 +200,34 @@ class SecureDomainAdmin(admin.ModelAdmin):
 
 
 @admin.register(Plan)
-class PlanAdmin(admin.ModelAdmin):
+class SecurePlanAdmin(admin.ModelAdmin):
     """
-    Manage subscription plans (create/edit/delete).
-    Only active plans can be chosen by tenants.
+    Only visible/runnable from the PUBLIC schema.
+    Tenant users should not see or modify plans via Admin.
     """
     list_display = ('name', 'price', 'billing_period', 'is_active', 'created_at')
     list_filter = ('billing_period', 'is_active')
     search_fields = ('name', 'description')
     readonly_fields = ('created_at',)
 
+    def get_queryset(self, request):
+        """Only show Plan entries in public schema."""
+        tenant = get_tenant(request)
+        if tenant.schema_name != 'public':
+            return Plan.objects.none()
+        return super().get_queryset(request)
+
+    def has_module_permission(self, request):
+        """Only allow this admin in public schema."""
+        tenant = get_tenant(request)
+        return tenant.schema_name == 'public'
+
 
 @admin.register(Order)
-class OrderAdmin(admin.ModelAdmin):
+class SecureOrderAdmin(admin.ModelAdmin):
     """
-    Public‐schema view of all Orders. The main admin can approve/reject.
-    Approving an order will:
-      - set order.status = 'approved'
-      - set order.paid_at = now
-      - update the Company.current_plan, subscription_start, paid_until, is_active_subscription
+    Only visible/runnable from the PUBLIC schema.
+    Tenant users cannot approve/reject via Admin; only public admin can.
     """
     list_display = ('company', 'plan', 'status', 'total_amount', 'billing_period',
                     'created_at', 'approved_at', 'paid_at')
@@ -228,17 +237,23 @@ class OrderAdmin(admin.ModelAdmin):
 
     actions = ['approve_orders', 'reject_orders']
 
+    def get_queryset(self, request):
+        """Only show Order entries in public schema."""
+        tenant = get_tenant(request)
+        if tenant.schema_name != 'public':
+            return Order.objects.none()
+        return super().get_queryset(request)
+
+    def has_module_permission(self, request):
+        """Only allow this admin in public schema."""
+        tenant = get_tenant(request)
+        return tenant.schema_name == 'public'
+
     def approve_orders(self, request, queryset):
         """
-        Approve selected orders, set paid_at, and update the Company's subscription fields:
-          - current_plan = order.plan
-          - subscription_start = now
-          - paid_until = now.date() + (30 days if monthly, 365 days if yearly)
-          - is_active_subscription = True
+        Approve selected orders, set paid_at, and update the Company's subscription fields.
         """
-        from django.utils import timezone
         updated = 0
-
         for order in queryset:
             if order.status != 'pending':
                 continue
@@ -248,12 +263,12 @@ class OrderAdmin(admin.ModelAdmin):
             order.paid_at = timezone.now()
             order.save()
 
-            # Update the associated Company in PUBLIC schema:
+            # Update the associated Company in PUBLIC schema
             company = order.company
             plan = order.plan
             company.current_plan = plan
             company.subscription_start = timezone.now()
-            # Compute paid_until based on plan.billing_period:
+            # Compute paid_until based on plan.billing_period
             if plan.billing_period == 'monthly':
                 company.paid_until = timezone.now().date() + timezone.timedelta(days=30)
             else:  # 'yearly'
@@ -269,13 +284,12 @@ class OrderAdmin(admin.ModelAdmin):
     approve_orders.short_description = "✓ Approve selected orders"
 
     def reject_orders(self, request, queryset):
-        """
-        Reject selected orders. Rejected orders cannot be re-approved.
-        """
+        """Reject selected orders. Rejected orders cannot be re-approved."""
         updated = queryset.filter(status='pending').update(status='rejected')
         self.message_user(request, f"{updated} order(s) rejected.")
 
     reject_orders.short_description = "✗ Reject selected orders"
+
 
 
 # Finally, register Company & Domain only in PUBLIC schema:
