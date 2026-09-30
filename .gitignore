@@ -1,6 +1,6 @@
 *.sqlite3
 db.json
-requirements.txt
+# requirements.txt is the canonical, tracked dependency manifest (was ignored by mistake since the initial commit)
 .idea
 staticfiles/
 
@@ -125,3 +125,5 @@ studenttransactiondetails.csv
 email_import.csv
 tm_final.csv
 tp_final.csv
+# Throwaway Keycloak E2E realm export: contains test credentials, never commit
+tools/keycloak_e2e/eventos-e2e-realm.json

@@ -1,7 +1,7 @@
 <!-- templates/registration/company_login.html -->
 {% extends 'base.html' %}
 
-{% block title %}Company Login - EventSaaS{% endblock %}
+{% block title %}Login - {{ company_name }}{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
@@ -9,18 +9,31 @@
         <div class="card">
             <div class="card-header bg-primary text-white text-center">
                 <h4 class="mb-0">
-                    <i class="fas fa-sign-in-alt me-2"></i>Company Login
+                    <i class="fas fa-sign-in-alt me-2"></i>{{ company_name }} Login
                 </h4>
             </div>
             <div class="card-body">
-                <form method="post">
+                {% if keycloak_login_enabled %}
+                <div class="d-grid mb-3">
+                    <a href="{% url 'identity:login' %}?next={{ next|default:'/'|urlencode }}" class="btn btn-success">
+                        <i class="fas fa-user-shield me-1"></i>Continue with Skill.jobs
+                    </a>
+                </div>
+                {% if legacy_login_enabled %}<div class="text-center text-muted small mb-3">or sign in with your EventOS password</div>{% endif %}
+                {% endif %}
+                {% if legacy_login_enabled %}
+                <form method="post" novalidate>
                     {% csrf_token %}
-                    
+                    {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+
                     {% if form.errors %}
                         <div class="alert alert-danger">
-                            {% for field, errors in form.errors.items %}
-                                {% for error in errors %}
-                                    <div>{{ error }}</div>
+                            {% for error in form.non_field_errors %}
+                                <div>{{ error }}</div>
+                            {% endfor %}
+                            {% for field in form %}
+                                {% for error in field.errors %}
+                                    <div>{{ field.label }}: {{ error }}</div>
                                 {% endfor %}
                             {% endfor %}
                         </div>
@@ -41,16 +54,17 @@
                             <i class="fas fa-sign-in-alt me-1"></i>Login
                         </button>
                     </div>
-
-                    {% if next %}
-                        <input type="hidden" name="next" value="{{ next }}">
-                    {% endif %}
                 </form>
+
+                <div class="text-center mt-2">
+                    <a href="{% url 'password_reset' %}" class="small">Forgot your password?</a>
+                </div>
+                {% endif %}
 
                 <hr>
                 <div class="text-center">
                     <p class="mb-0">Don't have an account?</p>
-                    <a href="{% url 'signup' %}" class="btn btn-outline-primary btn-sm">
+                    <a href="{% if legacy_signup_enabled %}{% url 'signup' %}{% if next %}?next={{ next|urlencode }}{% endif %}{% else %}{% url 'identity:login' %}?signup=1{% endif %}" class="btn btn-outline-primary btn-sm">
                         <i class="fas fa-user-plus me-1"></i>Sign Up
                     </a>
                 </div>
@@ -58,10 +72,4 @@
         </div>
     </div>
 </div>
-
-<style>
-.form-control {
-    margin-bottom: 0.5rem;
-}
-</style>
 {% endblock %}

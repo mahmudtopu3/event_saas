@@ -26,6 +26,7 @@ class SubscriptionMiddleware:
         # URIs that should bypass subscription check
         self.bypass_patterns = [
             r'^/accounts/',          # Authentication URLs
+            r'^/auth/',              # Keycloak OIDC login/callback/logout (identity first, then gating)
             r'^/login/',             # Login
             r'^/logout/',            # Logout
             r'^/subscription-check/', # Our subscription check view

@@ -44,9 +44,20 @@
                     {% if user.is_authenticated %}
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
-                                <i class="fas fa-user me-1"></i>{{ user.username }}
+                                <i class="fas fa-user me-1"></i>{% if eventos_principal %}{{ eventos_display_name }}{% else %}{{ user.username }}{% endif %}
                             </a>
                             <ul class="dropdown-menu">
+                                {% if eventos_principal %}
+                                <li><a class="dropdown-item" href="{% url 'organizer:dashboard' %}">
+                                    <i class="fas fa-calendar-plus me-1"></i>Organizer workspace
+                                </a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                {% elif keycloak_login_enabled %}
+                                <li><a class="dropdown-item" href="{% url 'identity:login' %}?link=1&next={{ request.path|urlencode }}">
+                                    <i class="fas fa-link me-1"></i>Link my Skill.jobs account
+                                </a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                {% endif %}
                                 {% if user.is_staff %}
                                 <li><a class="dropdown-item" href="{% url 'admin:index' %}">
                                     <i class="fas fa-cog me-1"></i>Admin Panel
@@ -54,7 +65,7 @@
                                 <li><hr class="dropdown-divider"></li>
                                 {% endif %}
                                 <li>
-                                    <form method="post" action="{% url 'logout' %}" style="margin: 0;">
+                                    <form method="post" action="{% if eventos_principal %}{% url 'identity:logout' %}{% else %}{% url 'logout' %}{% endif %}" style="margin: 0;">
                                         {% csrf_token %}
                                         <button type="submit" class="dropdown-item" style="border: none; background: none; width: 100%; text-align: left; padding: 0.25rem 1rem;">
                                             <i class="fas fa-sign-out-alt me-1"></i>Logout
@@ -70,7 +81,7 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="{% url 'signup' %}">
+                            <a class="nav-link" href="{% if legacy_signup_enabled %}{% url 'signup' %}{% else %}{% url 'identity:login' %}?signup=1{% endif %}">
                                 <i class="fas fa-user-plus me-1"></i>Sign Up
                             </a>
                         </li>

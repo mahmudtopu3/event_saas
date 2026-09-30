@@ -10,22 +10,48 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
+import os
 from pathlib import Path
+
+from django.core.exceptions import ImproperlyConfigured
+
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load environment variables from .env (see .env.example)
+load_dotenv(BASE_DIR / '.env')
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-pyyl^*3c7384$4s#b9h&_ixe+p^2uzx2ren7(u$w1e7s82m+g6'
-
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'True').lower() in ('1', 'true', 'yes')
 
-ALLOWED_HOSTS = ['*']
+
+def _env_list(name, default=''):
+    return [v.strip() for v in os.getenv(name, default).split(',') if v.strip()]
+
+
+def _required_env(name):
+    raise ImproperlyConfigured(f'{name} must be set when DEBUG is off')
+
+
+def _env_bool(name, default):
+    return os.getenv(name, str(default)).lower() in ('1', 'true', 'yes')
+
+
+# The insecure fallback key only exists for local development; production must set it.
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', '')
+if not SECRET_KEY:
+    if not DEBUG:
+        raise ImproperlyConfigured('DJANGO_SECRET_KEY must be set when DEBUG is off')
+    SECRET_KEY = 'django-insecure-pyyl^*3c7384$4s#b9h&_ixe+p^2uzx2ren7(u$w1e7s82m+g6'
+
+ALLOWED_HOSTS = [h.strip() for h in os.getenv('DJANGO_ALLOWED_HOSTS', '*').split(',') if h.strip()]
 
 
 # Multi-tenancy configuration
@@ -54,18 +80,22 @@ TENANT_APPS = [
     'django.contrib.admin',
     # Your tenant-specific apps
     'events',
+    'identity',
 ]
 
 
 
 INSTALLED_APPS = list(SHARED_APPS) + [app for app in TENANT_APPS if app not in SHARED_APPS]
 
-# Allow CORS for development
-CORS_ALLOW_ALL_ORIGINS = True  # Development only
-CORS_ALLOW_CREDENTIALS = True
+# CORS: explicit origins only. Allow-all is permitted solely for local development
+# (and never together with credentials).
+CORS_ALLOWED_ORIGINS = _env_list('CORS_ALLOWED_ORIGINS')
+CORS_ALLOW_ALL_ORIGINS = DEBUG and _env_bool('CORS_ALLOW_ALL_ORIGINS_DEV', True)  # keeps frontend/ demo working
+CORS_ALLOW_CREDENTIALS = not CORS_ALLOW_ALL_ORIGINS
 
 MIDDLEWARE = [
-    'django_tenants.middleware.main.TenantMainMiddleware', # Must be first
+    'identity.observability.CorrelationIdMiddleware',
+    'eventsaas.middleware.EventOSTenantMiddleware',  # Must be first (TenantMainMiddleware + inactive domains)
     'eventsaas.middleware.TenantURLConfMiddleware', 
     'companies.middleware.SubscriptionMiddleware', 
     'corsheaders.middleware.CorsMiddleware',
@@ -74,6 +104,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'identity.middleware.PrincipalMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -92,6 +123,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'events.context_processors.tenant_context',
+                'identity.context_processors.identity',
             ],
         },
     },
@@ -105,18 +137,22 @@ WSGI_APPLICATION = 'eventsaas.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django_tenants.postgresql_backend',
-        'NAME': 'eventsaas',
-        'USER': 'postgres',
-        'PASSWORD': 'admin123',
-        'HOST': '127.0.0.1',
-        'PORT': '5432',
+        'ENGINE': os.getenv('DATABASE_ENGINE', 'django_tenants.postgresql_backend'),
+        'NAME': os.getenv('DATABASE_NAME', 'eventsaas'),
+        'USER': os.getenv('DATABASE_USER', 'postgres'),
+        # The 'admin123' fallback is for local development only.
+        'PASSWORD': os.getenv('DATABASE_PASSWORD') or ('admin123' if DEBUG else _required_env('DATABASE_PASSWORD')),
+        'HOST': os.getenv('DATABASE_HOST', '127.0.0.1'),
+        'PORT': os.getenv('DATABASE_PORT', '5432'),
     }
 }
 
 TENANT_MODEL = 'companies.Company'
 TENANT_DOMAIN_MODEL = 'companies.Domain'
 DATABASE_ROUTERS = ('django_tenants.routers.TenantSyncRouter',)
+
+# Serve the public schema for hostnames without a Domain record (e.g. http://localhost:8000/)
+SHOW_PUBLIC_IF_NO_TENANT_FOUND = True
 
 
 # Password validation
@@ -170,6 +206,10 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
 
+# Email (console backend in development; override in production)
+EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@eventsaas.local')
+
 # Login/Logout redirects
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/'
@@ -181,3 +221,71 @@ TENANT_URLCONF = 'eventsaas.tenant_urls'
 
 # Force URLconf behavior
 PUBLIC_SCHEMA_URLCONF = 'eventsaas.urls'
+
+# Test runner provisions the public schema and fixture tenants once per run.
+TEST_RUNNER = 'eventsaas.test_runner.EventOSTestRunner'
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Identity / Keycloak (see docs/EVENTOS_KEYCLOAK_SETUP.md)
+# ──────────────────────────────────────────────────────────────────────────
+# Rollout flags: legacy | dual | keycloak. Read only through identity.conf.
+EVENTOS_AUTH_MODE = os.getenv('EVENTOS_AUTH_MODE', 'legacy')
+EMPLOYER_AUTH_MODE = os.getenv('EMPLOYER_AUTH_MODE', 'legacy')
+
+KEYCLOAK_ISSUER_URL = os.getenv('KEYCLOAK_ISSUER_URL', '')
+KEYCLOAK_CLIENT_ID = os.getenv('KEYCLOAK_CLIENT_ID', '')
+KEYCLOAK_CLIENT_SECRET = os.getenv('KEYCLOAK_CLIENT_SECRET', '')
+KEYCLOAK_AUDIENCE = os.getenv('KEYCLOAK_AUDIENCE', '')            # ID-token audience (defaults to client id)
+KEYCLOAK_API_AUDIENCE = os.getenv('KEYCLOAK_API_AUDIENCE', '')    # bearer tokens for /api/ (e.g. eventos-api)
+KEYCLOAK_BACKEND_AUDIENCE = os.getenv('KEYCLOAK_BACKEND_AUDIENCE', 'skilljobs-api')
+KEYCLOAK_ALLOWED_AZP = _env_list('KEYCLOAK_ALLOWED_AZP')
+KEYCLOAK_SCOPES = os.getenv('KEYCLOAK_SCOPES', 'openid')
+KEYCLOAK_POST_LOGOUT_REDIRECT_URI = os.getenv('KEYCLOAK_POST_LOGOUT_REDIRECT_URI', '')  # may contain {host}
+KEYCLOAK_REGISTRATION_URL = os.getenv('KEYCLOAK_REGISTRATION_URL', '')
+KEYCLOAK_PERSON_ID_SOURCE = os.getenv('KEYCLOAK_PERSON_ID_SOURCE', 'claim')  # claim | backend_link
+KEYCLOAK_PERSON_ID_CLAIM = os.getenv('KEYCLOAK_PERSON_ID_CLAIM', 'person_id')
+KEYCLOAK_HTTP_TIMEOUT = float(os.getenv('KEYCLOAK_HTTP_TIMEOUT', '5'))
+KEYCLOAK_SESSION_REVALIDATE_SECONDS = int(os.getenv('KEYCLOAK_SESSION_REVALIDATE_SECONDS', '300'))
+EVENTOS_OIDC_REQUIRE_HTTPS = _env_bool('EVENTOS_OIDC_REQUIRE_HTTPS', not DEBUG)
+EVENTOS_PRIVILEGED_ACR = os.getenv('EVENTOS_PRIVILEGED_ACR', '')
+
+# Canonical Skill.jobs services. Defaults fail closed until real providers are configured.
+SKILLJOBS_BACKEND_URL = os.getenv('SKILLJOBS_BACKEND_URL', '')
+SKILLJOBS_BACKEND_TIMEOUT = float(os.getenv('SKILLJOBS_BACKEND_TIMEOUT', '5'))
+EVENTOS_SERVICE_TOKEN = os.getenv('EVENTOS_SERVICE_TOKEN', '')
+EVENTOS_PROFILE_CLIENT = os.getenv('EVENTOS_PROFILE_CLIENT', 'identity.profile_client.UnavailableProfileClient')
+EVENTOS_EMPLOYER_CLIENT = os.getenv('EVENTOS_EMPLOYER_CLIENT', 'identity.employer_client.UnavailableEmployerClient')
+EVENTOS_ENTITLEMENT_CLIENT = os.getenv('EVENTOS_ENTITLEMENT_CLIENT', 'identity.entitlement_client.UnavailableEntitlementClient')
+EVENTOS_ORGANIZER_MEMBERSHIP_ROLES = _env_list('EVENTOS_ORGANIZER_MEMBERSHIP_ROLES', 'owner,admin')
+EVENTOS_PLATFORM_BASE_DOMAIN = os.getenv('EVENTOS_PLATFORM_BASE_DOMAIN', 'event.skill.jobs')
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'identity.authentication.KeycloakBearerAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.BasicAuthentication',   # DRF's previous default; kept for legacy clients
+    ],
+    'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.AllowAny'],
+}
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {'console': {'class': 'logging.StreamHandler'}},
+    'loggers': {'eventos.audit': {'handlers': ['console'], 'level': os.getenv('EVENTOS_AUDIT_LOG_LEVEL', 'INFO'),
+                                  'propagate': False}},
+}
+
+# ── Transport / cookie security (production) ───────────────────────────────
+CSRF_TRUSTED_ORIGINS = _env_list('CSRF_TRUSTED_ORIGINS')
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'   # Lax is required: the OIDC callback is a cross-site top-level GET
+CSRF_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SECURE = _env_bool('SESSION_COOKIE_SECURE', not DEBUG)
+CSRF_COOKIE_SECURE = _env_bool('CSRF_COOKIE_SECURE', not DEBUG)
+SECURE_SSL_REDIRECT = _env_bool('SECURE_SSL_REDIRECT', False)
+SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', '0'))
+SECURE_CONTENT_TYPE_NOSNIFF = True
+if _env_bool('USE_X_FORWARDED_PROTO', False):
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')

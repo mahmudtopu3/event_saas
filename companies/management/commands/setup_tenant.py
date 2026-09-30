@@ -43,6 +43,7 @@ class Command(BaseCommand):
                 schema_name=schema_name,
                 paid_until='2099-12-31',
                 on_trial=False,
+                is_active_subscription=True,
             )
             
             # Create the domain

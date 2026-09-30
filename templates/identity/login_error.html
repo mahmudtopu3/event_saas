@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+
+{% block title %}Sign-in problem - {{ company_name }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="alert alert-danger">
+            <h5 class="alert-heading"><i class="fas fa-exclamation-triangle me-2"></i>We couldn't sign you in</h5>
+            {% if reason == 'not_linked' or reason == 'onboarding_incomplete' %}
+                <p class="mb-0">Your Skill.jobs account setup isn't finished. Complete it at Skill.jobs, then try again.</p>
+            {% elif reason == 'domain_not_approved' or reason == 'unknown_domain' or reason == 'domain_inactive' or reason == 'https_required' %}
+                <p class="mb-0">Single sign-on isn't enabled for this address. Please use the organizer's official event site.</p>
+            {% elif reason == 'step_up_not_satisfied' %}
+                <p class="mb-0">This action needs a stronger sign-in (for example, two-factor verification).</p>
+            {% else %}
+                <p class="mb-0">The sign-in request was invalid or expired. Please start again.</p>
+            {% endif %}
+            <hr>
+            <small class="text-muted">Reference: {{ reason }}</small>
+        </div>
+        <a href="{% url 'events:list' %}" class="btn btn-outline-secondary">Back to events</a>
+    </div>
+</div>
+{% endblock %}

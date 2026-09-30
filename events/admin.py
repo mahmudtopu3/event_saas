@@ -7,7 +7,7 @@ class TenantEventAdmin(admin.ModelAdmin):
     list_display = ('title', 'start_date', 'status', 'registration_count', 'max_attendees', 'created_by')
     list_filter = ('status', 'start_date', 'created_at')
     search_fields = ('title', 'description', 'location')
-    readonly_fields = ('created_at', 'updated_at', 'registration_count')
+    readonly_fields = ('created_at', 'updated_at', 'registration_count', 'created_by_person_id')
     
     fieldsets = (
         ('Event Details', {
@@ -20,14 +20,16 @@ class TenantEventAdmin(admin.ModelAdmin):
             'fields': ('max_attendees', 'registration_count')
         }),
         ('Meta', {
-            'fields': ('created_by', 'created_at', 'updated_at'),
+            'fields': ('created_by', 'created_by_person_id', 'created_at', 'updated_at'),
             'classes': ('collapse',)
         }),
     )
 
     def save_model(self, request, obj, form, change):
         if not change:  # If creating new event
-            obj.created_by = request.user
+            from .registrants import creator_kwargs
+            for field, value in creator_kwargs(request).items():
+                setattr(obj, field, value)
         super().save_model(request, obj, form, change)
 
     def registration_count(self, obj):
@@ -42,10 +44,10 @@ class TenantEventAdmin(admin.ModelAdmin):
         return tenant.schema_name != 'public'
 
 class TenantRegistrationAdmin(admin.ModelAdmin):
-    list_display = ('user', 'event', 'status', 'registered_at')
+    list_display = ('registrant_label', 'person_id', 'event', 'status', 'registered_at')
     list_filter = ('status', 'registered_at', 'event__start_date')
-    search_fields = ('user__username', 'user__email', 'event__title')
-    readonly_fields = ('registered_at', 'updated_at')
+    search_fields = ('user__username', 'user__email', 'event__title', 'person_id')
+    readonly_fields = ('registered_at', 'updated_at', 'person_id', 'registration_snapshot', 'snapshot_version')
     
     def has_module_permission(self, request):
         """Only show registrations admin in tenant schemas"""

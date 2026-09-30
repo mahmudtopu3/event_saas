@@ -20,7 +20,10 @@ python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install dependencies
-pip install Django==5.0 django-tenants psycopg2-binary
+pip install -r requirements.txt
+
+# Configure environment (database credentials, port, secret key)
+cp .env.example .env
 
 # Create Django project
 django-admin startproject eventsaas .
@@ -246,3 +249,22 @@ python manage.py migrate_schemas
 - Add event categories and filtering
 - Create mobile-responsive design improvements
 - Add API endpoints for mobile apps
+## Skill.jobs shared identity (Keycloak SSO)
+
+EventOS can authenticate through the Skill.jobs Keycloak realm and identify people by canonical
+PersonID. It's **off by default** (`EVENTOS_AUTH_MODE=legacy`), so existing behaviour is unchanged.
+
+- Architecture: `docs/EVENTOS_TARGET_ARCHITECTURE.md`
+- Keycloak client setup: `docs/EVENTOS_KEYCLOAK_SETUP.md`
+- Custom domains + SSO: `docs/EVENTOS_MULTI_DOMAIN_SSO.md`
+- Employer/entitlement integration: `docs/EVENTOS_COMPANY_INTEGRATION.md`
+- Migration runbook / rollback: `docs/EVENTOS_IDENTITY_MIGRATION.md`, `docs/EVENTOS_ROLLBACK.md`
+
+### Tests
+
+```bash
+docker run -d --name eventos-test-db -e POSTGRES_PASSWORD=eventos_test -e POSTGRES_DB=eventsaas \
+  -p 127.0.0.1:55432:5432 postgres:16-alpine
+DATABASE_PORT=55432 DATABASE_PASSWORD=eventos_test python manage.py test
+```
+A real-Keycloak end-to-end check lives in `tools/keycloak_e2e/`.

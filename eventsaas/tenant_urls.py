@@ -26,6 +26,10 @@ urlpatterns = [
     path('accounts/', include('django.contrib.auth.urls')),
     
     path('accounts/signup/', signup, name='signup'),
+    # Keycloak OIDC (Authorization Code + PKCE)
+    path('auth/', include('identity.urls')),
+    # Organizer workspace for Keycloak-authenticated employer staff
+    path('organizer/', include('events.organizer_urls')),
      # ─── Subscription / Order Routes ─────────────────────────────────────
     path('plans/', view_plans, name='view_plans'),
     path('order/', tenant_order, name='tenant_order'),

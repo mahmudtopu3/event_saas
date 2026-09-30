@@ -6,10 +6,35 @@ from django.http import Http404
 from django.urls import reverse
 from django.utils.html import format_html
 from django_tenants.utils import get_tenant
-from .models import Company, Domain, Plan, Order
+from .models import Company, Domain, DomainAuditEvent, Plan, Order
+from . import provisioning
 
 
-class SecureCompanyAdmin(admin.ModelAdmin):
+class PublicSchemaOnlyMixin:
+    """
+    These models live in the public schema. The admin is also mounted on tenant hosts, where
+    tenant superusers would otherwise pass the default has_*_permission checks and could
+    create/edit platform rows (e.g. attach a Domain to any tenant). Deny all of it there.
+    """
+
+    def _on_public(self, request):
+        return get_tenant(request).schema_name == 'public'
+
+    def has_view_permission(self, request, obj=None):
+        return self._on_public(request) and super().has_view_permission(request, obj)
+
+    def has_add_permission(self, request, *args, **kwargs):
+        return self._on_public(request) and super().has_add_permission(request, *args, **kwargs)
+
+    def has_change_permission(self, request, obj=None):
+        return self._on_public(request) and super().has_change_permission(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        return self._on_public(request) and super().has_delete_permission(request, obj)
+
+
+
+class SecureCompanyAdmin(PublicSchemaOnlyMixin, admin.ModelAdmin):
     """
     Only visible/runnable from the PUBLIC schema. Allows:
     - toggling is_active_subscription, on_trial, paid_until
@@ -34,7 +59,7 @@ class SecureCompanyAdmin(admin.ModelAdmin):
         'is_active_subscription',
         'current_plan',
     )
-    search_fields = ('name', 'schema_name', 'contact_email')
+    search_fields = ('name', 'schema_name', 'contact_email', 'canonical_employer_id')
     readonly_fields = (
         'schema_name',
         'created_at',
@@ -45,6 +70,11 @@ class SecureCompanyAdmin(admin.ModelAdmin):
     fieldsets = (
         ('Company Information', {
             'fields': ('name', 'schema_name', 'contact_email', 'current_plan')
+        }),
+        ('Skill.jobs linkage', {
+            'fields': ('canonical_employer_id', 'canonical_tenant_id'),
+            'description': "Opaque references to the canonical Skill.jobs Employer/Tenant. "
+                           "EventOS doesn't own employer identity.",
         }),
         ('Subscription Management', {
             'fields': ('is_active_subscription', 'on_trial', 'paid_until', 'subscription_start'),
@@ -149,14 +179,60 @@ class SecureCompanyAdmin(admin.ModelAdmin):
     mark_as_active.short_description = "Remove trial status for selected companies"
 
 
-class SecureDomainAdmin(admin.ModelAdmin):
+class SecureDomainAdmin(PublicSchemaOnlyMixin, admin.ModelAdmin):
     """
     Only visible/runnable in PUBLIC schema. Show domains and the status
     of their associated Company.
     """
-    list_display = ('domain', 'tenant', 'is_primary', 'tenant_status', 'tenant_users_link')
-    list_filter = ('is_primary',)
+    list_display = ('domain', 'tenant', 'is_primary', 'is_active', 'oidc_callback_approved', 'tls_ready',
+                    'tenant_status', 'tenant_users_link')
+    list_filter = ('is_primary', 'is_active', 'oidc_callback_approved', 'tls_ready')
     search_fields = ('domain', 'tenant__name')
+    # SSO approval and verification change only through the audited actions below.
+    readonly_fields = ('ownership_verified_at', 'oidc_callback_approved', 'approved_by', 'disabled_reason')
+    actions = ['approve_oidc', 'revoke_oidc', 'disable_domains']
+
+    def save_model(self, request, obj, form, change):
+        actor = request.user.get_username()
+        repointed = change and ({'domain', 'tenant'} & set(form.changed_data))
+        if repointed and obj.oidc_callback_approved:
+            # SSO approval belongs to a specific host + tenant; it never carries over.
+            obj.oidc_callback_approved = False
+        super().save_model(request, obj, form, change)
+
+        def record(action, **detail):
+            DomainAuditEvent.objects.create(domain=obj, domain_name=obj.domain, tenant_schema=obj.tenant.schema_name,
+                                            action=action, actor=actor, detail={'via': 'admin', **detail})
+
+        if not change:
+            record('created')
+            return
+        if repointed:
+            record('oidc_revoked', reason='domain or tenant changed', changed=sorted(repointed))
+        if 'is_active' in form.changed_data:
+            record('activated' if obj.is_active else 'disabled')
+
+    def _run(self, request, queryset, fn, label, *args):
+        done, failed = 0, []
+        for domain in queryset.select_related('tenant'):
+            try:
+                fn(domain, request.user.get_username(), *args)
+                done += 1
+            except provisioning.ProvisioningError as exc:
+                failed.append(f'{domain.domain}: {exc}')
+        self.message_user(request, f'{done} domain(s) {label}.' + (f' Skipped: {"; ".join(failed)}' if failed else ''))
+
+    def approve_oidc(self, request, queryset):
+        self._run(request, queryset, provisioning.approve_oidc, 'approved for SSO')
+    approve_oidc.short_description = 'Approve for Keycloak SSO (register callback in Keycloak too)'
+
+    def revoke_oidc(self, request, queryset):
+        self._run(request, queryset, provisioning.revoke_oidc, 'SSO revoked', 'admin action')
+    revoke_oidc.short_description = 'Revoke Keycloak SSO'
+
+    def disable_domains(self, request, queryset):
+        self._run(request, queryset, provisioning.disable, 'disabled', 'disabled via admin')
+    disable_domains.short_description = 'Disable domain (stops routing and SSO)'
 
     def tenant_status(self, obj):
         """Shows whether the tenant’s subscription is active or expired."""
@@ -200,7 +276,7 @@ class SecureDomainAdmin(admin.ModelAdmin):
 
 
 @admin.register(Plan)
-class SecurePlanAdmin(admin.ModelAdmin):
+class SecurePlanAdmin(PublicSchemaOnlyMixin, admin.ModelAdmin):
     """
     Only visible/runnable from the PUBLIC schema.
     Tenant users should not see or modify plans via Admin.
@@ -224,7 +300,7 @@ class SecurePlanAdmin(admin.ModelAdmin):
 
 
 @admin.register(Order)
-class SecureOrderAdmin(admin.ModelAdmin):
+class SecureOrderAdmin(PublicSchemaOnlyMixin, admin.ModelAdmin):
     """
     Only visible/runnable from the PUBLIC schema.
     Tenant users cannot approve/reject via Admin; only public admin can.
@@ -290,6 +366,25 @@ class SecureOrderAdmin(admin.ModelAdmin):
 
     reject_orders.short_description = "✗ Reject selected orders"
 
+
+
+@admin.register(DomainAuditEvent)
+class DomainAuditEventAdmin(admin.ModelAdmin):
+    list_display = ('occurred_at', 'domain_name', 'tenant_schema', 'action', 'actor')
+    list_filter = ('action',)
+    search_fields = ('domain_name', 'tenant_schema', 'actor')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def has_module_permission(self, request):
+        return get_tenant(request).schema_name == 'public'
 
 
 # Finally, register Company & Domain only in PUBLIC schema:

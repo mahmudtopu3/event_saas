@@ -95,6 +95,20 @@ class Company(TenantMixin, TimeStampedModel):
         help_text="The subscription plan this company is currently using."
     )
 
+    # ── Canonical Skill.jobs linkage ──────────────────────────────────────
+    # EventOS does not own employer identity. These are opaque references to the
+    # canonical Employer / Tenant records (bigint, the Skill.jobs convention) and are
+    # never used as a human identity. Name/description/contact fields above are local
+    # EventOS display/config data; see docs/EVENTOS_COMPANY_INTEGRATION.md.
+    canonical_employer_id = models.BigIntegerField(
+        null=True, blank=True, unique=True,
+        help_text="Canonical Skill.jobs EmployerID this EventOS tenant belongs to.",
+    )
+    canonical_tenant_id = models.BigIntegerField(
+        null=True, blank=True, db_index=True,
+        help_text="Canonical Skill.jobs TenantID/OrganisationID, when the platform issues one.",
+    )
+
     # Auto-create/drop schema on Company create/delete
     auto_create_schema = True
     auto_drop_schema = True
@@ -110,9 +124,56 @@ class Company(TenantMixin, TimeStampedModel):
 class Domain(DomainMixin):
     """
     Domain model for tenant domains. Inherits `domain`, `tenant` FK, and
-    `is_primary` from DomainMixin. No extra fields needed.
+    `is_primary` from DomainMixin.
+
+    Routing and SSO are gated separately: a domain routes while `is_active`, but it
+    may only start/finish a Keycloak login once `oidc_callback_approved` is set (and
+    its exact callback URL is registered on the Keycloak client).
     """
-    pass
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Inactive domains no longer route to the tenant (served as unknown host).",
+    )
+    ownership_verified_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When DNS/administrative ownership of this domain was confirmed.",
+    )
+    tls_ready = models.BooleanField(default=False, help_text="HTTPS certificate is provisioned for this host.")
+    oidc_callback_approved = models.BooleanField(
+        default=False,
+        help_text="Host may run the Keycloak login flow. Its callback URL must also be registered in Keycloak.",
+    )
+    approved_by = models.CharField(max_length=150, blank=True)
+    disabled_reason = models.CharField(max_length=255, blank=True)
+
+    def oidc_redirect_uri(self, scheme='https'):
+        return f'{scheme}://{self.domain}/auth/callback/'
+
+
+class DomainAuditEvent(models.Model):
+    """Append-only record of custom-domain lifecycle and SSO approval changes."""
+    ACTIONS = [
+        ('created', 'Created'),
+        ('ownership_verified', 'Ownership verified'),
+        ('tls_ready', 'TLS ready'),
+        ('oidc_approved', 'OIDC callback approved'),
+        ('oidc_revoked', 'OIDC callback revoked'),
+        ('activated', 'Activated'),
+        ('disabled', 'Disabled'),
+    ]
+    domain = models.ForeignKey(Domain, on_delete=models.SET_NULL, null=True, related_name='audit_events')
+    domain_name = models.CharField(max_length=253)
+    tenant_schema = models.CharField(max_length=63)
+    action = models.CharField(max_length=32, choices=ACTIONS)
+    actor = models.CharField(max_length=150)
+    detail = models.JSONField(default=dict, blank=True)
+    occurred_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-occurred_at']
+
+    def __str__(self):
+        return f"{self.domain_name}: {self.action} by {self.actor}"
 
 
 class Order(models.Model):

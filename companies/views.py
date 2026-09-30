@@ -4,8 +4,10 @@ from django.http import Http404
 from .models import Company, Domain, Order, Plan
 from django_tenants.utils import get_tenant, schema_context
 from django.contrib.auth import get_user_model
+from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 
 
 def public_homepage(request):
@@ -57,6 +59,7 @@ def company_detail(request, schema_name):
         raise Http404("Company not found")
     
 
+@staff_member_required
 def company_users(request, schema_name):
     """
     List all users in the specified tenant's schema.
@@ -228,6 +231,9 @@ def subscription_check(request):
     """
     tenant = get_tenant(request)
     next_url = request.GET.get('next', '/')
+    if not url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()},
+                                           require_https=request.is_secure()):
+        next_url = '/'
     
     # Get company info
     try:

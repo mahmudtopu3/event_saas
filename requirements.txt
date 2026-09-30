@@ -1,0 +1,9 @@
+Django>=5.0,<5.1
+django-tenants
+psycopg2-binary
+djangorestframework
+django-cors-headers
+Pillow
+python-dotenv
+PyJWT[crypto]>=2.8,<3
+requests>=2.31,<3
